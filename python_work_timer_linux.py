@@ -4,14 +4,13 @@ import time
 from datetime import datetime
 import os
 
-
-class TimerApp:
+class WorkTimer:
     """Customizable timer application with work/pause intervals."""
     def __init__(self, root):
         """Initialize the timer GUI and default settings."""
         self.root = root
-        self.root.title("Timer")
-        self.root.geometry("330x220")
+        self.root.title("Work Timer")
+        self.root.geometry("270x365")
         self.root.resizable(False, False)
         self.root.attributes('-topmost', True)
         self.root.configure(bg='#222222')
@@ -25,15 +24,17 @@ class TimerApp:
             config_frame,
             text="Work (min):",
             fg='white',
-            bg='#222222'
-        ).grid(row=0, column=0, padx=3)
+            bg='#222222',
+            anchor="w"
+        ).grid(row=0, column=0, padx=3, sticky="w")
         self.work_entry = tk.Entry(
             config_frame,
             width=5,
             fg='white',
-            bg='#333333'
+            bg='#333333',
+            justify="center"
         )
-        self.work_entry.grid(row=0, column=1, padx=3)
+        self.work_entry.grid(row=0, column=1, padx=3, sticky="w")
         self.work_entry.insert(0, "25")
 
         # Pause time input
@@ -41,37 +42,95 @@ class TimerApp:
             config_frame,
             text="Pause (min):",
             fg='white',
-            bg='#222222'
-        ).grid(row=0, column=2, padx=3)
+            bg='#222222',
+            anchor="w"
+        ).grid(row=1, column=0, padx=3, sticky="w")
         self.pause_entry = tk.Entry(
             config_frame,
             width=5,
             fg='white',
-            bg='#333333'
+            bg='#333333',
+            justify="center"
         )
-        self.pause_entry.grid(row=0, column=3, padx=3)
+        self.pause_entry.grid(row=1, column=1, padx=3, sticky="w")
         self.pause_entry.insert(0, "5")
+
+        # Long pause time input
+        tk.Label(
+            config_frame,
+            text="Long pause (min):",
+            fg='white',
+            bg='#222222',
+            anchor="w"
+        ).grid(row=2, column=0, padx=3, sticky="w")
+        self.long_pause_entry = tk.Entry(
+            config_frame,
+            width=5,
+            fg='white',
+            bg='#333333',
+            justify="center"
+        )
+        self.long_pause_entry.grid(row=2, column=1, padx=3)
+        self.long_pause_entry.insert(0, "30")
+
+        # Cycle until long pause input
+        tk.Label(
+            config_frame,
+            text="Cycles until long pause:",
+            fg='white',
+            bg='#222222',
+            anchor="w"
+        ).grid(row=3, column=0, padx=3, sticky="w")
+        self.cylce_entry = tk.Entry(
+            config_frame,
+            width=5,
+            fg='white',
+            bg='#333333',
+            justify="center"
+        )
+        self.cylce_entry.grid(row=3, column=1, padx=3)
+        self.cylce_entry.insert(0, "4")
 
         # Timer display
         self.label = tk.Label(
             root,
-            text="25:00",
+            text="00:00",
             font=("Arial", 30),
+            fg='#FFD700',
+            bg='#222222'
+        )
+        self.label.pack(pady=10)
+
+        # Mode display
+        self.mode_label = tk.Label(
+            root,
+            text="Mode: Work",
+            font=("Arial", 12),
             fg='white',
             bg='#222222'
         )
-        self.label.pack(pady=5)
+        self.mode_label.pack(pady=5)
+
+        # Cycle counter display
+        self.cycle_label = tk.Label(
+            root,
+            text="Cycle: 1",
+            font=("Arial", 12),
+            fg='white',
+            bg='#222222'
+        )
+        self.cycle_label.pack(pady=5)
 
         # Button frame
         button_frame = tk.Frame(root, bg='#222222')
-        button_frame.pack(pady=2)
+        button_frame.pack(pady=10)
 
         # Control buttons
         self.start_button = tk.Button(
             button_frame,
             text="Start",
             command=self.start_timer,
-            width=6,
+            width=5,
             fg='white',
             bg='#333333'
         )
@@ -82,21 +141,21 @@ class TimerApp:
             text="Stop",
             command=self.stop_timer,
             state=tk.DISABLED,
-            width=6,
+            width=5,
             fg='white',
             bg='#333333'
         )
         self.stop_button.pack(side=tk.LEFT, padx=3)
 
         self.reset_button = tk.Button(
-            root,
+            button_frame,
             text="Reset",
             command=self.reset_timer,
-            width=6,
+            width=5,
             fg='white',
             bg='#333333'
         )
-        self.reset_button.pack(pady=1)
+        self.reset_button.pack(side=tk.LEFT, padx=5)
 
         # Real-time clock label at the bottom (smaller font)
         self.clock_label = tk.Label(
@@ -106,13 +165,14 @@ class TimerApp:
             fg='#888888',
             bg='#222222'
         )
-        self.clock_label.pack(side=tk.BOTTOM, pady=2)
+        self.clock_label.pack(side=tk.BOTTOM, pady=5)
         self.update_clock()  # Start clock updates
 
         # Timer state variables
         self.remaining_time = 0
         self.is_work_time = True
         self.timer_running = False
+        self.cycle_counter = 1
         self.update_durations()
 
     def update_clock(self):
@@ -135,17 +195,25 @@ class TimerApp:
     def update_durations(self):
         """Update timer durations from entry fields."""
         try:
-            work_min = int(self.work_entry.get())
-            pause_min = int(self.pause_entry.get())
-            self.remaining_time = (work_min * 60
-                                  if self.is_work_time
-                                  else pause_min * 60)
+            self.get_durations()
+            if self.is_work_time:
+                self.remaining_time = self.work_min * 60
+            elif self.cycle_counter % self.cycle_until_long_pause == 0:
+                self.remaining_time = self.long_pause_min * 60
+            else:
+                self.remaining_time = self.pause_min * 60
             mins, _ = divmod(self.remaining_time, 60)
             self.label.config(text=f"{mins:02d}:00")
             return True
         except ValueError:
             messagebox.showerror("Error", "Please enter valid numbers!")
             return False
+        
+    def get_durations(self):
+        self.work_min = int(self.work_entry.get())
+        self.pause_min = int(self.pause_entry.get())
+        self.long_pause_min = int(self.long_pause_entry.get())
+        self.cycle_until_long_pause = int(self.cylce_entry.get())
 
     def stop_timer(self):
         """Stop the timer and reset button states."""
@@ -157,6 +225,9 @@ class TimerApp:
         """Reset timer to initial state with current settings."""
         self.stop_timer()
         self.update_durations()
+        self.cycle_counter = 1
+        self.cycle_label.config(text=f"Cycle: {self.cycle_counter}")
+        self.mode_label.config(text=f"Mode: Work")
 
     def gentle_beep(self):
         """Play a sound file using aplay."""
@@ -164,6 +235,7 @@ class TimerApp:
         for _ in range(6):
             os.system(f"aplay {sound_file}")
             time.sleep(1)
+            # print("beep")
 
     def update_timer(self):
         """Update timer display and handle time transitions."""
@@ -171,19 +243,24 @@ class TimerApp:
             mins, secs = divmod(self.remaining_time, 60)
             self.label.config(text=f"{mins:02d}:{secs:02d}")
             self.remaining_time -= 1
-            if self.remaining_time < 0:
+            if self.remaining_time <= 0:
+                if self.is_work_time == False:
+                    self.cycle_counter += 1
+                    self.cycle_label.config(text=f"Cycle: {self.cycle_counter}")
                 self.gentle_beep()
                 self.is_work_time = not self.is_work_time
                 self.update_durations()
                 mins, secs = divmod(self.remaining_time, 60)
                 mode = "Work" if self.is_work_time else "Pause"
+                self.mode_label.config(text=f"Mode: {mode}")
                 messagebox.showinfo(
                     mode,
-                    f"Switched to {mode} time!\nRemaining: {mins:02d}:{secs:02d}"
+                    f"Switched to {mode} time!\nRemaining:"
+                    f"{mins:02d}:{secs:02d}"
                 )
             self.root.after(1000, self.update_timer)
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = TimerApp(root)
+    app = WorkTimer(root)
     root.mainloop()
